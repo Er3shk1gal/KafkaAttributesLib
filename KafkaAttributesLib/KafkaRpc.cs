@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 
 namespace KafkaAttributesLib
 {
+    //TODO: Urgent not only to topic but also to partition assigment
     //TODO: Avro, protobuf, byte[] support
     //TODO: Better error and null handling
     public class KafkaRpc
@@ -23,7 +24,7 @@ namespace KafkaAttributesLib
         private readonly HashSet<PendingMessagesBus> _pendingMessagesBus;
         private readonly HashSet<RecievedMessagesBus> _recievedMessagesBus;
         private readonly HashSet<IConsumer<object,object>> _consumerPool;
-        public KafkaRpc(RPCConfig config, ILogger<KafkaRpc> logger, KafkaTopicManager kafkaTopicManager)
+        public KafkaRpc(RPCConfig config, ILogger<KafkaRpc> logger, KafkaTopicManager kafkaTopicManager, IServiceProvider serviceProvider)
         {
             _logger = logger;
             _producer = ConfigureProducer(config);
@@ -32,7 +33,6 @@ namespace KafkaAttributesLib
             _pendingMessagesBus = ConfigurePendingMessages(config.responseTopics);
             _recievedMessagesBus = ConfigureRecievedMessages(config.responseTopics);
             _consumerPool = ConfigureConsumers(config.responseTopics.Count);
-
         }
         public void BeginRecieving(List<string> responseTopics)
         {

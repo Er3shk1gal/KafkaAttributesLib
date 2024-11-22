@@ -18,11 +18,14 @@ public class KafkaTopicManager(IAdminClient adminClient)
     {
         try
         {
+            
+            //TODO: debug and chack how it works
             var topicExists = _adminClient.GetMetadata(topicName, TimeSpan.FromSeconds(10));
             if (topicExists.Topics.Count == 0)
             {
                 return false;
             }
+
             return true;
         }
         catch (Exception e)
@@ -32,7 +35,26 @@ public class KafkaTopicManager(IAdminClient adminClient)
             throw new CheckTopicException("Failed to check topic");
         }
     }
+    public bool CheckTopicSatisfiesRequirements(string topicName, int numPartitions)
+    {
+        try
+        {
+            //TODO: debug and chack how it works
+            var topicExists = _adminClient.GetMetadata(topicName, TimeSpan.FromSeconds(10));
+            if (topicExists.Topics.Count != 0 && topicExists.Topics.Any(t => t.Topic==topicName && t.Partitions.Count==numPartitions))
+            {
+                return true;
+            }
 
+            return false;
+        }
+        catch (Exception e)
+        {
+            
+            Console.WriteLine($"An error occurred: {e.Message}"); 
+            throw new CheckTopicException("Failed to check topic");
+        }
+    }
     /// <summary>
     /// Creates a new Kafka topic with the specified name, number of partitions, and replication factor.
     /// </summary>
@@ -69,6 +91,22 @@ public class KafkaTopicManager(IAdminClient adminClient)
             throw new CreateTopicException("Failed to create topic");
         }
     }
-
+    public bool DeleteTopic(string topicName)
+    {
+        try
+        {
+            var result = _adminClient.DeleteTopicsAsync(new List<string> { topicName });
+            if (result.IsCompleted)
+            {
+                return true;
+            }
+            throw new DeleteTopicException("Failed to delete topic");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw new DeleteTopicException("Failed to delete topic");
+        }
+    }
   
 }
