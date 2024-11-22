@@ -12,6 +12,6 @@ namespace KafkaAttributesLib.Utils.RPC
         public ConsumerConfig consumerConfig { get; set; } = null!;
         public ProducerConfig producerConfig { get; set; } = null!;
         public List<string> responseTopics { get; set; } = new List<string>();
-        public enum MessageSendingVariant messageSendingVariant { get; set; }
+        public MessageSendingVariant messageSendingVariant { get; set; }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using KafkaAttributesLib.Attributes;
@@ -39,7 +40,45 @@ namespace KafkaAttributesLib
             }
             _serviceProvider = serviceProvider;
         }
-        //FIXME: Add parsing for many method parameters
+        public void Consume()
+        {
+            try
+            {
+                while (true)
+                {
+                    if (_consumer == null)
+                    {
+                        _logger.LogError("Consumer is null");
+                        throw new ConsumerException("Consumer is null");
+                    }
+
+                    ConsumeResult<K, M> consumeResult = _consumer.Consume();
+                    if (consumeResult != null)
+                    {
+                        var headerBytes = consumeResult.Message.Headers
+                            .FirstOrDefault(x => x.Key.Equals("method"));
+
+                        if (headerBytes != null)
+                        {
+                            var methodString = Encoding.UTF8.GetString(headerBytes.GetValueBytes());
+                            InvokeMethodByHeader(methodString, consumeResult.Message.Value.ToString(), consumeResult.TopicPartition.Partition);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex is MyKafkaException)
+                {
+                    _logger.LogError(ex, "Consumer error");
+                }
+                else
+                {
+                    _logger.LogError(ex, "Unhandled error");
+                }
+            }
+        }
+        //TODO: Add parsing for many method parameters
         private string InvokeMethodByHeader(string methodName, string? message, int topicPartition)
         {
             string serviceName = _config.topicConfig.Services.Where(x=>x.partition == topicPartition).FirstOrDefault().ServiceName;
