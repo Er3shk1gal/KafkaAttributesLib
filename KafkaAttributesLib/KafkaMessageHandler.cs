@@ -79,7 +79,7 @@ namespace KafkaAttributesLib
             }
         }
         //TODO: Add parsing for many method parameters
-        private string InvokeMethodByHeader(string methodName, string? message, int topicPartition)
+        private void InvokeMethodByHeader(string methodName, string? message, int topicPartition)
         {
             string serviceName = _config.topicConfig.Services.Where(x=>x.partition == topicPartition).FirstOrDefault().ServiceName;
             var serviceMethodPair = GetClassAndMethod(serviceName, methodName);
@@ -99,13 +99,14 @@ namespace KafkaAttributesLib
                 if(serviceMethodPair.Method.ReturnType == typeof(void))
                 {
                     serviceMethodPair.Method.Invoke(serviceInstance,new object[]{});
-                    return JsonConvert.SerializeObject(new {
-                        IsSuccess = true
-                    });
+                   
                 }
                 else
                 {
-                    return JsonConvert.SerializeObject(serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}));
+                    if(!(bool)serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}))
+                    {
+                        throw new Exception("Wrong method implementation");
+                    }
                 }
             }
             if(serviceMethodPair.Method.GetParameters().Length == 0)
@@ -113,8 +114,10 @@ namespace KafkaAttributesLib
                 throw new UnconfiguredServiceMethodsExeption("Wrong method implementation");
             }
             var parameterType = serviceMethodPair.Method.GetParameters()[0].ParameterType;
-            var response = serviceMethodPair.Method.Invoke(serviceInstance,new []{JsonConvert.DeserializeObject(message,parameterType)});
-            return JsonConvert.SerializeObject(response);
+            if(!(bool)serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}))
+            {
+                throw new Exception("Wrong method implementation");
+            }
         }
         
         private ServiceMethodPair GetClassAndMethod(string serviceName,string methodName)
