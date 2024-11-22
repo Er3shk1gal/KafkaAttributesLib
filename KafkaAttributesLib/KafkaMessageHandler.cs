@@ -20,6 +20,7 @@ namespace KafkaAttributesLib
     public class KafkaMessageHandler<K,M>
     {
         //TODO: Add exception handling
+        //TODO: Write producer for non rpc usage
         private readonly IProducer<K,M> _producer;
         private IConsumer<K,M> _consumer;
         private readonly MessageHandlerConfig _config;
@@ -85,41 +86,67 @@ namespace KafkaAttributesLib
             var serviceMethodPair = GetClassAndMethod(serviceName, methodName);
             var method = serviceMethodPair.Method;
             var service = serviceMethodPair.Service;
-            var serviceInstance = _serviceProvider.GetRequiredService(service);
-            if (serviceInstance == null)
+            using (var scope = _serviceProvider.CreateScope())
             {
-                throw new UnconfiguredServiceMethodsExeption("Service not found");
-            }
-            if(message == null)
-            {
-                if(serviceMethodPair.Method.GetParameters().Length != 0)
+            
+        
+                var serviceInstance = scope.ServiceProvider.GetRequiredService(service.GetInterfaces().FirstOrDefault());
+                if (serviceInstance == null)
                 {
-                    throw new UnconfiguredServiceMethodsExeption("Wrong method implementation");
+                    throw new UnconfiguredServiceMethodsExeption("Service not found");
                 }
-                if(serviceMethodPair.Method.ReturnType == typeof(void))
+                if(message == null)
                 {
-                    serviceMethodPair.Method.Invoke(serviceInstance,new object[]{});
-                   
+                    InvokeMethodWithoutParameters(serviceMethodPair, serviceInstance);
+                    return;
                 }
-                else
-                {
-                    if(!(bool)serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}))
-                    {
-                        throw new Exception("Wrong method implementation");
-                    }
-                }
-            }
-            if(serviceMethodPair.Method.GetParameters().Length == 0)
-            {
-                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation");
-            }
-            var parameterType = serviceMethodPair.Method.GetParameters()[0].ParameterType;
-            if(!(bool)serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}))
-            {
-                throw new Exception("Wrong method implementation");
+
+                InvokeMethodWithParameters(serviceMethodPair, serviceInstance, message);
+
+                
             }
         }
-        
+        private void InvokeMethodWithoutParameters(ServiceMethodPair serviceMethodPair, object serviceInstance)
+        {
+            var method = serviceMethodPair.Method;
+
+            if (method.GetParameters().Length != 0)
+            {
+                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should not have parameters.");
+            }
+
+            if (method.ReturnType == typeof(void))
+            {
+                method.Invoke(serviceInstance, null);
+            }
+            else
+            {
+                var result = method.Invoke(serviceInstance, null);
+                if (!(bool)result)
+                {
+                    throw new Exception("Wrong method implementation: expected a boolean return type.");
+                }
+            }
+        }
+
+        private void InvokeMethodWithParameters(ServiceMethodPair serviceMethodPair, object serviceInstance, string message)
+        {
+            var method = serviceMethodPair.Method;
+
+            if (method.GetParameters().Length == 0)
+            {
+                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should have parameters.");
+            }
+
+            var parameterType = method.GetParameters()[0].ParameterType;
+            var parameterValue = JsonConvert.DeserializeObject(message, parameterType);
+
+            var result = method.Invoke(serviceInstance, new object[] { parameterValue });
+            if (!(bool)result)
+            {
+                throw new Exception("Wrong method implementation: expected a boolean return type.");
+            }
+        }
         private ServiceMethodPair GetClassAndMethod(string serviceName,string methodName)
         {
             var serviceClasses = Assembly.GetExecutingAssembly().GetTypes()

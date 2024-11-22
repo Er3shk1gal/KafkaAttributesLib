@@ -15,6 +15,7 @@ namespace KafkaAttributesLib
     //TODO: Urgent not only to topic but also to partition assigment
     //TODO: Avro, protobuf, byte[] support
     //TODO: Better error and null handling
+    //TODO: KafkaRpcMessageHandler
     public class KafkaRpc
     {
         private IProducer<object, object> _producer;
