@@ -40,7 +40,7 @@ namespace KafkaAttributesLib
             _serviceProvider = serviceProvider;
         }
         //FIXME: Add parsing for many method parameters
-        private async Task InvokeMethodByHeader(string methodName, string message, int topicPartition)
+        private string InvokeMethodByHeader(string methodName, string? message, int topicPartition)
         {
             string serviceName = _config.topicConfig.Services.Where(x=>x.partition == topicPartition).FirstOrDefault().ServiceName;
             var serviceMethodPair = GetClassAndMethod(serviceName, methodName);
@@ -51,10 +51,33 @@ namespace KafkaAttributesLib
             {
                 throw new UnconfiguredServiceMethodsExeption("Service not found");
             }
+            if(message == null)
+            {
+                if(serviceMethodPair.Method.GetParameters().Length != 0)
+                {
+                    throw new UnconfiguredServiceMethodsExeption("Wrong method implementation");
+                }
+                if(serviceMethodPair.Method.ReturnType == typeof(void))
+                {
+                    serviceMethodPair.Method.Invoke(serviceInstance,new object[]{});
+                    return JsonConvert.SerializeObject(new {
+                        IsSuccess = true
+                    });
+                }
+                else
+                {
+                    return JsonConvert.SerializeObject(serviceMethodPair.Method.Invoke(serviceInstance,new object[]{}));
+                }
+            }
+            if(serviceMethodPair.Method.GetParameters().Length == 0)
+            {
+                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation");
+            }
             var parameterType = serviceMethodPair.Method.GetParameters()[0].ParameterType;
-            serviceMethodPair.Method.Invoke(serviceInstance,new []{JsonConvert.DeserializeObject(message,parameterType)});
-
+            var response = serviceMethodPair.Method.Invoke(serviceInstance,new []{JsonConvert.DeserializeObject(message,parameterType)});
+            return JsonConvert.SerializeObject(response);
         }
+        
         private ServiceMethodPair GetClassAndMethod(string serviceName,string methodName)
         {
             var serviceClasses = Assembly.GetExecutingAssembly().GetTypes()
