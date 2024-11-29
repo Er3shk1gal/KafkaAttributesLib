@@ -8,7 +8,7 @@ namespace KafkaAttributesLib.Utils.RPC
 {
     public class RecievedMessagesBus
     {
-        public string TopicName { get; set; } = "";
+        public RpcTopic TopicInfo { get; set; } = null!;
         public HashSet<Message<object,object>> Messages { get; set;} = new HashSet<Message<object,object>>();
     }
 }

@@ -12,7 +12,6 @@ using Newtonsoft.Json;
 
 namespace KafkaAttributesLib
 {
-    //TODO: Urgent not only to topic but also to partition assigment
     //TODO: Avro, protobuf, byte[] support
     //TODO: Better error and null handling
     //TODO: KafkaRpcMessageHandler
@@ -35,18 +34,18 @@ namespace KafkaAttributesLib
             _recievedMessagesBus = ConfigureRecievedMessages(config.responseTopics);
             _consumerPool = ConfigureConsumers(config.responseTopics.Count);
         }
-        public void BeginRecieving(List<string> responseTopics)
+        public void BeginRecieving()
         {
             for (int i = 0; i < _consumerPool.Count; i++)
             {
                 
                 Thread thread = new Thread(x=>{
-                     Consume(_consumerPool.ElementAt(i),responseTopics[i]);
+                     Consume(_consumerPool.ElementAt(i),_config.responseTopics[i]);
                 });
                 thread.Start();
             }
         }
-        public async Task<Q> BroadcastMessageJson<T,Q>(string methodName, string serviceName, string requestTopic, string responseTopic, T request)
+        public async Task<Q> BroadcastMessageJson<T,Q>(string methodName, string serviceName, RpcTopic requestTopic, RpcTopic responseTopic, T request)
         {
             try
             {
@@ -78,13 +77,13 @@ namespace KafkaAttributesLib
                 throw;
             }
         }
-        public T GetMessageJson<T>(object MessageKey, string topicName)
+        public T GetMessageJson<T>(object MessageKey, RpcTopic topic)
         {
             //FIXME: find a better way without suppresing not null
             if(IsMessageRecieved(MessageKey))
             {
-                var message = _recievedMessagesBus.FirstOrDefault(x=>x.TopicName == topicName)!.Messages.FirstOrDefault(x=>x.Key==MessageKey);
-                _recievedMessagesBus.FirstOrDefault(x=>x.TopicName == topicName)!.Messages.Remove(message!);
+                var message = _recievedMessagesBus.FirstOrDefault(x=>x.TopicInfo.Equals(topic))!.Messages.FirstOrDefault(x=>x.Key==MessageKey);
+                _recievedMessagesBus.FirstOrDefault(x=>x.TopicInfo.Equals(topic))!.Messages.Remove(message!);
                 return JsonConvert.DeserializeObject<T>(message!.Value.ToString()!)!;
             }
             throw new ConsumerException("Message not recieved");
@@ -135,24 +134,24 @@ namespace KafkaAttributesLib
             }
           
         }
-        private HashSet<PendingMessagesBus> ConfigurePendingMessages(List<string> ResponseTopics)
+        private HashSet<PendingMessagesBus> ConfigurePendingMessages(List<RpcTopic> ResponseTopics)
         {
             if(ResponseTopics.Count == 0)
             {
                 throw new ConfigureMessageBusException("At least one requests topic must e provided!");
             }
             var PendingMessages = new HashSet<PendingMessagesBus>();
-            foreach(var requestTopic in ResponseTopics)
+            foreach(var responseTopic in ResponseTopics)
             {
-                 if(!IsTopicAvailable(requestTopic))
+                 if(!IsTopicAvailable(responseTopic.TopicName))
                 {
-                    _kafkaTopicManager.CreateTopic(requestTopic, 3, 1);
+                    _kafkaTopicManager.CreateTopic(responseTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==responseTopic.TopicName).Max(x=>x.Partition), _config.replicationFactorStandart);
                 }
-                PendingMessages.Add(new PendingMessagesBus(){ TopicName=requestTopic, MessageKeys = new HashSet<MethodKeyPair>()});
+                PendingMessages.Add(new PendingMessagesBus(){ TopicInfo=responseTopic, MessageKeys = new HashSet<MethodKeyPair>()});
             }
             return PendingMessages;
         }
-        private HashSet<RecievedMessagesBus> ConfigureRecievedMessages(List<string> ResponseTopics)
+        private HashSet<RecievedMessagesBus> ConfigureRecievedMessages(List<RpcTopic> ResponseTopics)
         {
             if(ResponseTopics.Count == 0)
             {
@@ -161,11 +160,11 @@ namespace KafkaAttributesLib
             HashSet<RecievedMessagesBus> Responses = new HashSet<RecievedMessagesBus>();
             foreach(var RequestTopic in ResponseTopics)
             {
-                if(!IsTopicAvailable(RequestTopic))
+                if(!IsTopicAvailable(RequestTopic.TopicName))
                 {
-                    _kafkaTopicManager.CreateTopic(RequestTopic, 3, 1);
+                    _kafkaTopicManager.CreateTopic(RequestTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==RequestTopic.TopicName).Max(x=>x.Partition)+1, _config.replicationFactorStandart);
                 }
-                Responses.Add(new RecievedMessagesBus() { TopicName = RequestTopic, Messages = new HashSet<Message<object, object>>()});
+                Responses.Add(new RecievedMessagesBus() { TopicInfo = RequestTopic, Messages = new HashSet<Message<object, object>>()});
             }
             return Responses;
         }
@@ -193,13 +192,13 @@ namespace KafkaAttributesLib
                 throw;
             }
         }
-        private bool IsTopicPendingMessageBusExist(string responseTopic)
+        private bool IsTopicPendingMessageBusExist(RpcTopic responseTopic)
         {
-            return _pendingMessagesBus.Any(x => x.TopicName == responseTopic);
+            return _pendingMessagesBus.Any(x => x.TopicInfo.Equals(responseTopic));
         }
-        private void Consume(IConsumer<object, object> localConsumer, string topicName)
+        private void Consume(IConsumer<object, object> localConsumer, RpcTopic topic)
         {
-            var partitions = new List<TopicPartition> { new TopicPartition(topicName, 0) };
+            var partitions = new List<TopicPartition> { new TopicPartition(topic.TopicName, topic.Partition) };
             localConsumer.Assign(partitions);
 
             while (true)
@@ -211,11 +210,11 @@ namespace KafkaAttributesLib
                 }
                 try
                 {
-                    var pendingMessageBus = _pendingMessagesBus.FirstOrDefault(x => x.TopicName == topicName);
+                    var pendingMessageBus = _pendingMessagesBus.FirstOrDefault(x => x.TopicInfo.Equals(topic));
                     if (pendingMessageBus == null)
                     {
-                        _logger.LogError("Pending message bus not found for topic {topicName}", topicName);
-                        throw new ConsumerException($"Pending message bus not found for topic {topicName}");
+                        _logger.LogError("Pending message bus not found for topic {topicName}", topic.TopicName);
+                        throw new ConsumerException($"Pending message bus not found for topic {topic.TopicName}");
                     }
 
                     var pendingMessage = pendingMessageBus.MessageKeys.FirstOrDefault(x => x.MessageKey == result.Message.Key);
@@ -236,7 +235,7 @@ namespace KafkaAttributesLib
                     if (pendingMessage.MessageMethod == method)
                     {
                         localConsumer.Commit(result);
-                        _recievedMessagesBus.FirstOrDefault(x => x.TopicName == topicName)!.Messages.Add(result.Message);
+                        _recievedMessagesBus.FirstOrDefault(x => x.TopicInfo.Equals(topic))!.Messages.Add(result.Message);
                         pendingMessageBus.MessageKeys.Remove(pendingMessage);
                     }
                     else
@@ -257,21 +256,22 @@ namespace KafkaAttributesLib
                 }
             }
         }
-        private async Task<bool> Produce(string topicName, Message<object, object> message, string responseTopic)
+        private async Task<bool> Produce(RpcTopic requestTopic, Message<object, object> message, RpcTopic responseTopic)
         {
             try
             {
-                bool IsTopicExists = IsTopicAvailable(topicName);
+                //FIXME:Check if partition exists
+                bool IsTopicExists = IsTopicAvailable(requestTopic.TopicName);
                 if (IsTopicExists && IsTopicPendingMessageBusExist( responseTopic))
                 {
                     var deliveryResult = await _producer.ProduceAsync(
-                            new TopicPartition(topicName, new Partition(0)), 
+                            new TopicPartition(requestTopic.TopicName, new Partition(requestTopic.Partition)), 
                             message);
                     if (deliveryResult.Status == PersistenceStatus.Persisted)
                     {
                         _logger.LogInformation("Message delivery status: Persisted {Result}", deliveryResult.Value);
                       
-                            _pendingMessagesBus.FirstOrDefault(x=>x.TopicName == responseTopic)!.MessageKeys.Add(new MethodKeyPair(){
+                            _pendingMessagesBus.FirstOrDefault(x=>x.TopicInfo.Equals(responseTopic))!.MessageKeys.Add(new MethodKeyPair(){
                             MessageKey = message.Key,
                             MessageMethod = Encoding.UTF8.GetString(message.Headers.FirstOrDefault(x => x.Key.Equals("method"))!.GetValueBytes())
                         });
@@ -285,14 +285,14 @@ namespace KafkaAttributesLib
                     
                 }
                 
-                bool IsTopicCreated = _kafkaTopicManager.CreateTopic(topicName, Convert.ToInt32(Environment.GetEnvironmentVariable("PARTITIONS_STANDART")), Convert.ToInt16(Environment.GetEnvironmentVariable("REPLICATION_FACTOR_STANDART")));
+                bool IsTopicCreated = _kafkaTopicManager.CreateTopic(requestTopic.TopicName, requestTopic.Partition+1, _config.replicationFactorStandart);
                 if (IsTopicCreated && IsTopicPendingMessageBusExist( responseTopic))
                 {
-                    var deliveryResult = await _producer.ProduceAsync(new TopicPartition(topicName, new Partition(0)), message);
+                    var deliveryResult = await _producer.ProduceAsync(new TopicPartition(requestTopic.TopicName, new Partition(requestTopic.Partition)), message);
                     if (deliveryResult.Status == PersistenceStatus.Persisted)
                     {
                         _logger.LogInformation("Message delivery status: Persisted {Result}", deliveryResult.Value);
-                        _pendingMessagesBus.FirstOrDefault(x=>x.TopicName == responseTopic)!.MessageKeys.Add(new MethodKeyPair(){
+                        _pendingMessagesBus.FirstOrDefault(x=>x.TopicInfo.Equals(responseTopic))!.MessageKeys.Add(new MethodKeyPair(){
                             MessageKey = message.Key,
                             MessageMethod = Encoding.UTF8.GetString(message.Headers.FirstOrDefault(x => x.Key.Equals("method"))!.GetValueBytes())
                         });

@@ -8,7 +8,7 @@ namespace KafkaAttributesLib.Utils.RPC
 {
     public class PendingMessagesBus
     {
-        public string TopicName {get;set;} = "";
+        public RpcTopic TopicInfo {get;set;} = null!;
         public HashSet<MethodKeyPair> MessageKeys {get;set;} = new HashSet<MethodKeyPair>();
     }
 }
