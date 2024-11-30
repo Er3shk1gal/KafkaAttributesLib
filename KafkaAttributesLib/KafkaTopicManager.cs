@@ -1,13 +1,14 @@
 ﻿using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using KafkaAttributesLib.Exceptions.TopicExceptions;
+using Microsoft.Extensions.Logging;
 
 namespace KafkaAttributesLib;
 
-public class KafkaTopicManager(IAdminClient adminClient)
+public class KafkaTopicManager(IAdminClient adminClient, ILogger<KafkaTopicManager> logger)
 {
     private readonly IAdminClient _adminClient = adminClient;
-
+    private readonly ILogger<KafkaTopicManager> _logger = logger;
     /// <summary>
     /// Checks if a Kafka topic with the specified name exists.
     /// </summary>
@@ -31,7 +32,7 @@ public class KafkaTopicManager(IAdminClient adminClient)
         catch (Exception e)
         {
             
-            Console.WriteLine($"An error occurred: {e.Message}"); 
+            _logger.LogError($"An error occurred: {e.Message}"); 
             throw new CheckTopicException("Failed to check topic");
         }
     }
@@ -51,7 +52,26 @@ public class KafkaTopicManager(IAdminClient adminClient)
         catch (Exception e)
         {
             
-            Console.WriteLine($"An error occurred: {e.Message}"); 
+            _logger.LogError($"An error occurred: {e.Message}"); 
+            throw new CheckTopicException("Failed to check topic");
+        }
+    }
+    public bool CheckTopicContainsPartitions(string topicName, int partition) 
+    {
+        try
+        {
+            var topicExists = _adminClient.GetMetadata(topicName, TimeSpan.FromSeconds(10));
+            if (topicExists.Topics.Count != 0 && topicExists.Topics.Any(t => t.Topic==topicName && t.Partitions.Any(t=>t.PartitionId==partition)))
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception e)
+        {
+            
+            _logger.LogError($"An error occurred: {e.Message}"); 
             throw new CheckTopicException("Failed to check topic");
         }
     }
@@ -87,7 +107,7 @@ public class KafkaTopicManager(IAdminClient adminClient)
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            _logger.LogError(e.Message);
             throw new CreateTopicException("Failed to create topic");
         }
     }
@@ -104,7 +124,7 @@ public class KafkaTopicManager(IAdminClient adminClient)
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            _logger.LogError(e.Message);
             throw new DeleteTopicException("Failed to delete topic");
         }
     }

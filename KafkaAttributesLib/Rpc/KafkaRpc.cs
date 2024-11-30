@@ -143,7 +143,7 @@ namespace KafkaAttributesLib
             var PendingMessages = new HashSet<PendingMessagesBus>();
             foreach(var responseTopic in ResponseTopics)
             {
-                 if(!IsTopicAvailable(responseTopic.TopicName))
+                 if(!IsTopicAvailable(responseTopic.TopicName, responseTopic.Partition))
                 {
                     _kafkaTopicManager.CreateTopic(responseTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==responseTopic.TopicName).Max(x=>x.Partition), _config.replicationFactorStandart);
                 }
@@ -158,21 +158,21 @@ namespace KafkaAttributesLib
                 throw new ConfigureMessageBusException("At least one response topic must e provided!");
             }
             HashSet<RecievedMessagesBus> Responses = new HashSet<RecievedMessagesBus>();
-            foreach(var RequestTopic in ResponseTopics)
+            foreach(var responseTopic in ResponseTopics)
             {
-                if(!IsTopicAvailable(RequestTopic.TopicName))
+                if(!IsTopicAvailable(responseTopic.TopicName, responseTopic.Partition))
                 {
-                    _kafkaTopicManager.CreateTopic(RequestTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==RequestTopic.TopicName).Max(x=>x.Partition)+1, _config.replicationFactorStandart);
+                    _kafkaTopicManager.CreateTopic(responseTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==responseTopic.TopicName).Max(x=>x.Partition)+1, _config.replicationFactorStandart);
                 }
-                Responses.Add(new RecievedMessagesBus() { TopicInfo = RequestTopic, Messages = new HashSet<Message<object, object>>()});
+                Responses.Add(new RecievedMessagesBus() { TopicInfo = responseTopic, Messages = new HashSet<Message<object, object>>()});
             }
             return Responses;
         }
-        private bool IsTopicAvailable(string topicName)
+        private bool IsTopicAvailable(string topicName, int partition)
         {
             try
             {
-                bool IsTopicExists = _kafkaTopicManager.CheckTopicExists(topicName);
+                bool IsTopicExists = _kafkaTopicManager.CheckTopicContainsPartitions(topicName, partition);
                 if (IsTopicExists)
                 {
                     return IsTopicExists;
@@ -261,7 +261,7 @@ namespace KafkaAttributesLib
             try
             {
                 //FIXME:Check if partition exists
-                bool IsTopicExists = IsTopicAvailable(requestTopic.TopicName);
+                bool IsTopicExists = IsTopicAvailable(requestTopic.TopicName, responseTopic.Partition);
                 if (IsTopicExists && IsTopicPendingMessageBusExist( responseTopic))
                 {
                     var deliveryResult = await _producer.ProduceAsync(
