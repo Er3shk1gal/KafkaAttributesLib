@@ -17,7 +17,7 @@ namespace KafkaAttributesLib.Utils
     {
         //TODO: Add parsing for many method parameters
         //TODO: Exception handling
-        public static bool InvokeMethodByHeader(IServiceProvider serviceProvider,string methodName,string serviceName,[Optional] List<object>? parameters)
+        public static object InvokeMethodByHeader(IServiceProvider serviceProvider,string methodName,string serviceName,[Optional] List<object>? parameters)
         {
             ServiceMethodPair serviceMethodPair = GetClassAndMethodTypes(serviceName, methodName);
             MethodInfo method = serviceMethodPair.Method;
@@ -27,65 +27,76 @@ namespace KafkaAttributesLib.Utils
             {
                 if(lifetime==ServiceLifetime.Scoped)
                 {
-                    InvokeMethodWithParameters( method, GetScopedService(serviceProvider,service), parameters);
+                    return InvokeMethodWithParameters( method, GetScopedService(serviceProvider,service), parameters);
                 }
                 else if(lifetime==ServiceLifetime.Singleton)
                 {
-                    InvokeMethodWithParameters( method, GetSingletonService(serviceProvider,service), parameters);
+                    return InvokeMethodWithParameters( method, GetSingletonService(serviceProvider,service), parameters);
                 }
                 else if(lifetime==ServiceLifetime.Transient)
                 {
-                    InvokeMethodWithParameters( method, GetTransientService(serviceProvider,service), parameters);
+                    return InvokeMethodWithParameters( method, GetTransientService(serviceProvider,service), parameters);
                 }
             }
             if(lifetime==ServiceLifetime.Scoped)
             {
-                InvokeMethodWithoutParameters( method, GetScopedService(serviceProvider,service));
+                return InvokeMethodWithoutParameters( method, GetScopedService(serviceProvider,service));
             }
             else if(lifetime==ServiceLifetime.Singleton)
             {
-                InvokeMethodWithoutParameters( method, GetSingletonService(serviceProvider,service));
+                return InvokeMethodWithoutParameters( method, GetSingletonService(serviceProvider,service));
             }
             else if(lifetime==ServiceLifetime.Transient)
             {
-                InvokeMethodWithoutParameters( method, GetTransientService(serviceProvider,service));
+                return InvokeMethodWithoutParameters( method, GetTransientService(serviceProvider,service));
             }
-            return true;
+            throw new InvokeMethodException("Failed to invoke method");
         }
-        private static bool InvokeMethodWithoutParameters(MethodInfo method,object serviceInstance)
+        private static object InvokeMethodWithoutParameters(MethodInfo method,object serviceInstance)
         {
             if (method.GetParameters().Length != 0)
             {
-                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should not have parameters.");
+                throw new InvokeMethodException("Wrong method implementation: method should not have parameters.");
             }
 
             if (method.ReturnType == typeof(void))
             {
                 method.Invoke(serviceInstance, null);
+                return true;
             }
             else
             {
                 var result = method.Invoke(serviceInstance, null);
-                if (!(bool)result)
+                if (result != null)
                 {
-                    throw new Exception("Wrong method implementation: expected a boolean return type.");
+                    return result;
                 }
             }
+            throw new InvokeMethodException("Method invocation failed");
         }
 
-        private static void InvokeMethodWithParameters(MethodInfo method, object serviceInstance, List<object> parameters)
+        private static object InvokeMethodWithParameters(MethodInfo method, object serviceInstance, List<object> parameters)
         {
 
             if (method.GetParameters().Length == 0)
             {
-                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should have parameters.");
+                throw new InvokeMethodException("Wrong method implementation: method should have parameters.");
             }
 
-            var result = method.Invoke(serviceInstance, parameters.ToArray());
-            if (!(bool)result)
+            if (method.ReturnType == typeof(void))
             {
-                throw new Exception("Wrong method implementation: expected a boolean return type.");
+                method.Invoke(serviceInstance, parameters.ToArray());
+                return true;
             }
+            else
+            {
+                var result = method.Invoke(serviceInstance, parameters.ToArray());
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            throw new InvokeMethodException("Method invocation failed");
         }
         public static ParameterInfo[] GetParameters(string methodName,string serviceName)
         {
