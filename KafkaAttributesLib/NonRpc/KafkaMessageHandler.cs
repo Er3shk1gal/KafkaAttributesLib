@@ -9,6 +9,7 @@ using Confluent.Kafka;
 using KafkaAttributesLib.Attributes;
 using KafkaAttributesLib.Exceptions;
 using KafkaAttributesLib.Exceptions.ProducerExceptions;
+using KafkaAttributesLib.Exceptions.ReflectionExceptions;
 using KafkaAttributesLib.Exceptions.TopicExceptions;
 using KafkaAttributesLib.Utils.MessageHandler;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,6 @@ namespace KafkaAttributesLib
     public class KafkaMessageHandler<K,M>
     {
         //TODO: Add exception handling
-        //TODO: Write producer for non rpc usage
         private readonly IProducer<K,M> _producer;
         private IConsumer<K,M> _consumer;
         private readonly MessageHandlerConfig _config;
@@ -88,8 +88,6 @@ namespace KafkaAttributesLib
             var service = serviceMethodPair.Service;
             using (var scope = _serviceProvider.CreateScope())
             {
-            
-        
                 var serviceInstance = scope.ServiceProvider.GetRequiredService(service.GetInterfaces().FirstOrDefault());
                 if (serviceInstance == null)
                 {
@@ -103,7 +101,6 @@ namespace KafkaAttributesLib
 
                 InvokeMethodWithParameters(serviceMethodPair, serviceInstance, message);
 
-                
             }
         }
         private void InvokeMethodWithoutParameters(ServiceMethodPair serviceMethodPair, object serviceInstance)
@@ -147,11 +144,10 @@ namespace KafkaAttributesLib
                 throw new Exception("Wrong method implementation: expected a boolean return type.");
             }
         }
-        private ServiceMethodPair GetClassAndMethod(string serviceName,string methodName)
+        private ServiceMethodPair GetClassAndMethodTypes(string serviceName,string methodName)
         {
             var serviceClasses = Assembly.GetExecutingAssembly().GetTypes()
             .Where(t => t.GetCustomAttributes(typeof(KafkaServiceNameAttribute), false).Any());
-          
             foreach (var serviceClass in serviceClasses)
             {
                 var serviceNameAttr = (KafkaServiceNameAttribute)serviceClass
@@ -175,7 +171,6 @@ namespace KafkaAttributesLib
                                 Method = method,
                             };
                         }
-                    
                     }
                 }
             }
@@ -187,7 +182,6 @@ namespace KafkaAttributesLib
         }
         private bool ConfigureConsumer(MessageHandlerConfig config)
         {
-        
             _consumer = new ConsumerBuilder<K,M>(config.consumerConfig).Build();
             if(CheckTopicConfigs())
             {
@@ -222,7 +216,6 @@ namespace KafkaAttributesLib
                     }
                     throw new DeleteTopicException("Failed to delete topic");
                 }
-            
             }
             catch (Exception e)
             {
@@ -239,14 +232,10 @@ namespace KafkaAttributesLib
         {
             try
             {
-                
-                
-                
                 if(!IsTopicSatisfyesRequirements(_config.topicConfig.TopicName,_config.topicConfig.PartitionCount   ))
                 {
                     throw new TopicSatisfyesRequirementsException();
                 }
-                
                 return true;
             }
             catch (Exception e)
@@ -260,11 +249,24 @@ namespace KafkaAttributesLib
                 throw;
             }
         }
+        private ServiceLifetime GetServiceLifetime(Type service)
+        {
+            var serviceCollection = (_serviceProvider as IServiceProvider)?.GetService(typeof(IServiceCollection)) as IServiceCollection;
+
+            if (serviceCollection != null)
+            {
+                var serviceType = serviceCollection.FirstOrDefault(x=>x.ServiceType==service);
+                if(serviceType != null)
+                {
+                    return serviceType.Lifetime;
+                }
+            }
+            throw new GetServiceLifetimeException("Failed to get service lifetime");
+        }
         private bool IsValid(object value)
         {
             var validationResults = new List<ValidationResult>();
             var validationContext = new ValidationContext(value, null, null);
-            
             bool isValid = Validator.TryValidateObject(value, validationContext, validationResults, true);
 
             if (!isValid)
