@@ -29,27 +29,30 @@ namespace KafkaAttributesLib.Utils
                 {
                     InvokeMethodWithParameters( method, GetScopedService(serviceProvider,service), parameters);
                 }
+                else if(lifetime==ServiceLifetime.Singleton)
+                {
+                    InvokeMethodWithParameters( method, GetSingletonService(serviceProvider,service), parameters);
+                }
+                else if(lifetime==ServiceLifetime.Transient)
+                {
+                    InvokeMethodWithParameters( method, GetTransientService(serviceProvider,service), parameters);
+                }
             }
             if(lifetime==ServiceLifetime.Scoped)
             {
                 InvokeMethodWithoutParameters( method, GetScopedService(serviceProvider,service));
             }
+            else if(lifetime==ServiceLifetime.Singleton)
+            {
+                InvokeMethodWithoutParameters( method, GetSingletonService(serviceProvider,service));
+            }
+            else if(lifetime==ServiceLifetime.Transient)
+            {
+                InvokeMethodWithoutParameters( method, GetTransientService(serviceProvider,service));
+            }
             return true;
         }
-        private static object GetScopedService(IServiceProvider serviceProvider, Type serviceType)
-        {
-            using (var scope = serviceProvider.CreateScope())
-            {
-                var serviceInstance = scope.ServiceProvider.GetRequiredService(serviceType.GetInterfaces().FirstOrDefault());
-                if (serviceInstance != null)
-                {
-                    return serviceInstance;
-                }
-            }
-            throw new GetScopedServiceException("Failed to get scoped service");
-
-        }
-        private static void InvokeMethodWithoutParameters(MethodInfo method,object serviceInstance)
+        private static bool InvokeMethodWithoutParameters(MethodInfo method,object serviceInstance)
         {
             if (method.GetParameters().Length != 0)
             {
@@ -102,6 +105,37 @@ namespace KafkaAttributesLib.Utils
                 }
             }
             throw new GetServiceLifetimeException("Failed to get service lifetime");
+        }
+        private static object GetScopedService(IServiceProvider serviceProvider, Type serviceType)
+        {
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var serviceInstance = scope.ServiceProvider.GetRequiredService(serviceType.GetInterfaces().FirstOrDefault());
+                if (serviceInstance != null)
+                {
+                    return serviceInstance;
+                }
+            }
+            throw new GetScopedServiceException("Failed to get scoped service");
+
+        }
+        private static object GetSingletonService(IServiceProvider serviceProvider, Type serviceType)
+        {
+            var serviceInstance = serviceProvider.GetRequiredService(serviceType.GetInterfaces().FirstOrDefault());
+            if (serviceInstance != null)
+            {
+                return serviceInstance;
+            }
+            throw new GetSingletonServiceException("Failed to get singleton service");
+        }
+        private static object GetTransientService(IServiceProvider serviceProvider, Type serviceType)
+        {
+            var serviceInstance = serviceProvider.GetRequiredService(serviceType.GetInterfaces().FirstOrDefault());
+            if (serviceInstance != null)
+            {
+                return serviceInstance;
+            }
+            throw new GetTransientServiceException("Failed to get transient service");
         }
         private static ServiceMethodPair GetClassAndMethodTypes(string serviceName,string methodName)
         {
