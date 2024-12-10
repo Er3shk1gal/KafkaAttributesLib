@@ -132,7 +132,6 @@ namespace KafkaAttributesLib
                 }
                 throw;
             }
-          
         }
         private HashSet<PendingMessagesBus> ConfigurePendingMessages(List<RpcTopic> ResponseTopics)
         {
@@ -143,7 +142,7 @@ namespace KafkaAttributesLib
             var PendingMessages = new HashSet<PendingMessagesBus>();
             foreach(var responseTopic in ResponseTopics)
             {
-                 if(!IsTopicAvailable(responseTopic.TopicName, responseTopic.Partition))
+                if(!IsTopicAvailable(responseTopic.TopicName, responseTopic.Partition))
                 {
                     _kafkaTopicManager.CreateTopic(responseTopic.TopicName, ResponseTopics.Where(x=>x.TopicName==responseTopic.TopicName).Max(x=>x.Partition), _config.replicationFactorStandart);
                 }
@@ -179,7 +178,6 @@ namespace KafkaAttributesLib
                 }
                 _logger.LogError("Unable to subscribe to topic");
                 throw new ConsumerTopicUnavailableException("Topic unavailable");
-            
             }
             catch (Exception e)
             {
@@ -260,7 +258,6 @@ namespace KafkaAttributesLib
         {
             try
             {
-                //FIXME:Check if partition exists
                 bool IsTopicExists = IsTopicAvailable(requestTopic.TopicName, responseTopic.Partition);
                 if (IsTopicExists && IsTopicPendingMessageBusExist( responseTopic))
                 {
@@ -270,21 +267,15 @@ namespace KafkaAttributesLib
                     if (deliveryResult.Status == PersistenceStatus.Persisted)
                     {
                         _logger.LogInformation("Message delivery status: Persisted {Result}", deliveryResult.Value);
-                      
                             _pendingMessagesBus.FirstOrDefault(x=>x.TopicInfo.Equals(responseTopic))!.MessageKeys.Add(new MethodKeyPair(){
                             MessageKey = message.Key,
                             MessageMethod = Encoding.UTF8.GetString(message.Headers.FirstOrDefault(x => x.Key.Equals("method"))!.GetValueBytes())
                         });
                         return true;
-                        
-                        
                     }
-                    
                     _logger.LogError("Message delivery status: Not persisted {Result}", deliveryResult.Value);
                     throw new MessageProduceException("Message delivery status: Not persisted" + deliveryResult.Value);
-                    
                 }
-                
                 bool IsTopicCreated = _kafkaTopicManager.CreateTopic(requestTopic.TopicName, requestTopic.Partition+1, _config.replicationFactorStandart);
                 if (IsTopicCreated && IsTopicPendingMessageBusExist( responseTopic))
                 {
@@ -298,10 +289,8 @@ namespace KafkaAttributesLib
                         });
                         return true;
                     }
-                    
                     _logger.LogError("Message delivery status: Not persisted {Result}", deliveryResult.Value);
                     throw new MessageProduceException("Message delivery status: Not persisted");
-                    
                 }
                 _logger.LogError("Topic unavailable");
                 throw new MessageProduceException("Topic unavailable");

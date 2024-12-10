@@ -22,7 +22,7 @@ namespace KafkaAttributesLib.NonRpc
         {
             _producer = producer;
             _logger = logger;
-            _kafkaTopicManager = kafkaTopicManager;   
+            _kafkaTopicManager = kafkaTopicManager;
             _replicationFactorStandart = replicationFactorStandart;
         }
         public async Task<bool> ProduceAsync(Topic topic, Message<object, object> message)
