@@ -9,6 +9,7 @@ namespace KafkaAttributesLib.Utils.MessageHandler
     {
         public string TopicName { get; set; } = null!;
         public int PartitionCount { get; set; }
+        public short ReplicationFactorStandart {get; set;}
         public List<ServiceConfig> Services { get; set; } = null!;
     }
 }
