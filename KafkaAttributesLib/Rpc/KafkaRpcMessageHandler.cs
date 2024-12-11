@@ -9,6 +9,7 @@ using Confluent.Kafka;
 using KafkaAttributesLib.Exceptions;
 using KafkaAttributesLib.Exceptions.ProducerExceptions;
 using KafkaAttributesLib.Exceptions.TopicExceptions;
+using KafkaAttributesLib.Utils;
 using KafkaAttributesLib.Utils.MessageHandler;
 using KafkaAttributesLib.Utils.RPC;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,8 +61,8 @@ namespace KafkaAttributesLib.Rpc
                         if (headerBytes != null)
                         {
                             var methodString = Encoding.UTF8.GetString(headerBytes.GetValueBytes());
-                            InvokeMethodByHeader(methodString, consumeResult.Message.Value.ToString(), consumeResult.TopicPartition.Partition);
-                        }
+                            ServiceResolver.GetParameters(methodString,consumeResult.Topic);  
+                        }_config.topicConfig.Services.Where(x=>x.partition == topicPartition).FirstOrDefault()
                     }
                 }
             }
@@ -83,7 +84,6 @@ namespace KafkaAttributesLib.Rpc
         }
         private bool ConfigureConsumer()
         {
-        
             _consumer = new ConsumerBuilder<K,M>(_config.consumerConfig).Build();
             if(CheckTopicConfigs())
             {

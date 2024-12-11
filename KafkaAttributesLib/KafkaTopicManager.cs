@@ -19,7 +19,6 @@ public class KafkaTopicManager(IAdminClient adminClient, ILogger<KafkaTopicManag
     {
         try
         {
-            
             //TODO: debug and chack how it works
             var topicExists = _adminClient.GetMetadata(topicName, TimeSpan.FromSeconds(10));
             if (topicExists.Topics.Count == 0)
@@ -31,7 +30,6 @@ public class KafkaTopicManager(IAdminClient adminClient, ILogger<KafkaTopicManag
         }
         catch (Exception e)
         {
-            
             _logger.LogError($"An error occurred: {e.Message}"); 
             throw new CheckTopicException("Failed to check topic");
         }

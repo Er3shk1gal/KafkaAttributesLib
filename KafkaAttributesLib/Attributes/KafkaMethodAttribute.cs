@@ -9,7 +9,6 @@ namespace KafkaAttributesLib.Attributes
     public class KafkaMethodAttribute : Attribute
     {
         public string MethodName { get; }
-
         public KafkaMethodAttribute(string methodName)
         {
             MethodName = methodName;

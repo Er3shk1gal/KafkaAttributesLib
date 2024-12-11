@@ -148,7 +148,7 @@ namespace KafkaAttributesLib.Utils
             }
             throw new GetTransientServiceException("Failed to get transient service");
         }
-        private static ServiceMethodPair GetClassAndMethodTypes(string serviceName,string methodName)
+        public static ServiceMethodPair GetClassAndMethodTypes(string serviceName,string methodName)
         {
             var serviceClasses = Assembly.GetExecutingAssembly().GetTypes()
             .Where(t => t.GetCustomAttributes(typeof(KafkaServiceNameAttribute), false).Any());

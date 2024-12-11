@@ -11,6 +11,7 @@ using KafkaAttributesLib.Exceptions;
 using KafkaAttributesLib.Exceptions.ProducerExceptions;
 using KafkaAttributesLib.Exceptions.ReflectionExceptions;
 using KafkaAttributesLib.Exceptions.TopicExceptions;
+using KafkaAttributesLib.Utils;
 using KafkaAttributesLib.Utils.MessageHandler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -61,7 +62,8 @@ namespace KafkaAttributesLib
                         if (headerBytes != null)
                         {
                             var methodString = Encoding.UTF8.GetString(headerBytes.GetValueBytes());
-                            InvokeMethodByHeader(methodString, consumeResult.Message.Value.ToString(), consumeResult.TopicPartition.Partition);
+                            var parameters = ServiceResolver.GetParameters(methodString,_config.topicConfig.Services.Where(x=>x.partition == consumeResult.TopicPartition.Partition).FirstOrDefault().ServiceName);
+                            InvokeMethodByHeader(methodString, consumeResult.Message.Value.ToString(), );
                         }
                     }
                 }
@@ -77,103 +79,6 @@ namespace KafkaAttributesLib
                     _logger.LogError(ex, "Unhandled error");
                 }
             }
-        }
-        //TODO: Add parsing for many method parameters
-        private void InvokeMethodByHeader(string methodName, string? message, int topicPartition)
-        {
-            string serviceName = _config.topicConfig.Services.Where(x=>x.partition == topicPartition).FirstOrDefault().ServiceName;
-            var serviceMethodPair = GetClassAndMethod(serviceName, methodName);
-            var method = serviceMethodPair.Method;
-            var service = serviceMethodPair.Service;
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var serviceInstance = scope.ServiceProvider.GetRequiredService(service.GetInterfaces().FirstOrDefault());
-                if (serviceInstance == null)
-                {
-                    throw new UnconfiguredServiceMethodsExeption("Service not found");
-                }
-                if(message == null)
-                {
-                    InvokeMethodWithoutParameters(serviceMethodPair, serviceInstance);
-                    return;
-                }
-
-                InvokeMethodWithParameters(serviceMethodPair, serviceInstance, message);
-
-            }
-        }
-        private void InvokeMethodWithoutParameters(ServiceMethodPair serviceMethodPair, object serviceInstance)
-        {
-            var method = serviceMethodPair.Method;
-
-            if (method.GetParameters().Length != 0)
-            {
-                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should not have parameters.");
-            }
-
-            if (method.ReturnType == typeof(void))
-            {
-                method.Invoke(serviceInstance, null);
-            }
-            else
-            {
-                var result = method.Invoke(serviceInstance, null);
-                if (!(bool)result)
-                {
-                    throw new Exception("Wrong method implementation: expected a boolean return type.");
-                }
-            }
-        }
-
-        private void InvokeMethodWithParameters(ServiceMethodPair serviceMethodPair, object serviceInstance, string message)
-        {
-            var method = serviceMethodPair.Method;
-
-            if (method.GetParameters().Length == 0)
-            {
-                throw new UnconfiguredServiceMethodsExeption("Wrong method implementation: method should have parameters.");
-            }
-
-            var parameterType = method.GetParameters()[0].ParameterType;
-            var parameterValue = JsonConvert.DeserializeObject(message, parameterType);
-
-            var result = method.Invoke(serviceInstance, new object[] { parameterValue });
-            if (!(bool)result)
-            {
-                throw new Exception("Wrong method implementation: expected a boolean return type.");
-            }
-        }
-        private ServiceMethodPair GetClassAndMethodTypes(string serviceName,string methodName)
-        {
-            var serviceClasses = Assembly.GetExecutingAssembly().GetTypes()
-            .Where(t => t.GetCustomAttributes(typeof(KafkaServiceNameAttribute), false).Any());
-            foreach (var serviceClass in serviceClasses)
-            {
-                var serviceNameAttr = (KafkaServiceNameAttribute)serviceClass
-                    .GetCustomAttributes(typeof(KafkaServiceNameAttribute), false)
-                    .FirstOrDefault();
-                if (serviceNameAttr != null && serviceNameAttr.ServiceName == serviceName)
-                {
-                    var methods = serviceClass.GetMethods()
-                    .Where(m => m.GetCustomAttributes(typeof(KafkaMethodAttribute), false).Any());
-                    foreach (var method in methods)
-                    {
-                        var methodAttr = (KafkaMethodAttribute)method
-                            .GetCustomAttributes(typeof(KafkaMethodAttribute), false)
-                            .FirstOrDefault();
-
-                        if (methodAttr != null && methodAttr.MethodName == methodName)
-                        {
-                            return new ServiceMethodPair()
-                            {
-                                Service = serviceClass,
-                                Method = method,
-                            };
-                        }
-                    }
-                }
-            }
-            throw new UnconfiguredServiceMethodsExeption("Method not found");
         }
         private IProducer<K,M> ConfigureProducer()
         {

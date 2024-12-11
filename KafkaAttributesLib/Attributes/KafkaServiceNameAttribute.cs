@@ -9,6 +9,8 @@ namespace KafkaAttributesLib.Attributes
     public class KafkaServiceNameAttribute : Attribute
     {
         public string ServiceName { get; }
+        public string ResponseTopicName { get; }
+        public int ResponsePartition {get;}
 
         public KafkaServiceNameAttribute(string serviceName)
         {

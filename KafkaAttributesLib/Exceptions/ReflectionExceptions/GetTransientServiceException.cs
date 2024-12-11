@@ -7,6 +7,8 @@ namespace KafkaAttributesLib.Exceptions.ReflectionExceptions
 {
     public class GetTransientServiceException : ReflectionException
     {
-        
+        public GetTransientServiceException(string message) : base(message)
+        {
+        }
     }
 }
